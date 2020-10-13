@@ -1,0 +1,3 @@
+[submodule "technical-challenge"]
+	path = technical-challenge
+	url = git@github.com:landtechnologies/technical-challenge.git
