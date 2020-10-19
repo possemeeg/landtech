@@ -27,7 +27,7 @@ def mk_tree(company_id, comp_reader, owner_reader, writer):
 
     # write the root
     writer.write(company_text(0, current_company.company,
-        counts[current_company.company.id]))
+        count_for_company(current_company.company.id, companies, counts)))
 
     write_tree(path_to_comp, companies, counts, writer, company_id)
 
@@ -43,7 +43,8 @@ def write_tree(path_to_comp, companies, counts, writer, starred=None):
             child = companies[child_id] # asuming valid data and child exists
 
             writer.write('  ')
-            writer.write(company_text(level + 1, child, counts[child_id],
+            writer.write(company_text(level + 1, child,
+                count_for_company(child_id, companies, counts),
                 child_id == starred))
 
             # if this child is on the path and is not the end
@@ -76,7 +77,8 @@ def expand_tree(company_id, comp_reader, owner_reader, writer):
 
         for child_id in current_iter.child_itr:
             child = companies[child_id] # asuming valid data and child exists
-            writer.write(company_text(len(path) + 1, child, counts[child_id]))
+            writer.write(company_text(len(path) + 1, child,
+                count_for_company(child_id, companies, counts)))
 
             if child.children_ids:
                 path.append(current_iter)
@@ -169,3 +171,9 @@ def company_text(level, company, count, is_target=False):
     stats = f'owner of {count} land parcel{plural}'
     stars = (' ' + '*' * 3) if is_target else ''
     return f'{margin}{company.id}; {company.name}; {stats}{stars}\n'
+
+def count_for_company(company, company_map, counts):
+    count = counts.get(company, 0)
+    for child in company_map[company].children_ids:
+        count += count_for_company(child, company_map, counts)
+    return count
