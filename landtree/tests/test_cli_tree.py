@@ -34,9 +34,12 @@ basic_expanded_tree_rows = [
 def test_basic_tree(companies, ownership, company, expected_tree):
     writer = StringIO()
     mk_tree(company, companies, ownership, writer)
-
     writer.seek(0)
-    for i, line in enumerate(writer.readlines()):
+    #print(writer.getvalue())
+    lines = writer.readlines()
+
+    assert len(lines) == len(expected_tree)
+    for i, line in enumerate(lines):
         assert line.rstrip() == expected_tree[i]
 
 @pytest.mark.parametrize(
@@ -50,7 +53,9 @@ def test_excpand_tree(companies, ownership, company, expected_tree):
     expand_tree('comp1', companies, ownership, writer)
 
     writer.seek(0)
-    for i, line in enumerate(writer.readlines()):
+    lines = writer.readlines()
+    assert len(lines) == len(expected_tree)
+    for i, line in enumerate(lines):
         assert line.rstrip() == expected_tree[i]
 
 

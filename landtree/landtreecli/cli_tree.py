@@ -3,9 +3,37 @@ Provides text based tree structure
 '''
 import csv
 from collections import namedtuple, Counter, defaultdict, deque
+from functools import partial
 
-Company = namedtuple('Company', 'id name parent_id children_ids')
+#Company = namedtuple('Company', 'id name parent_id children_ids')
 CompanyChildItr = namedtuple('CompanyChildItr', 'company child_itr')
+
+class Company:
+    __slots__ = ['id', 'name', 'parent_id', 'children_ids', '_full_count']
+    
+    def __init__(self, id, name, parent_id, children_ids):
+        self.id = id
+        self.name = name
+        self.parent_id = parent_id
+        self.children_ids = children_ids
+        self._full_count = None
+        
+    def full_count(self, counter):
+        if self._full_count is None:
+            self._full_count = counter(self.id)
+        return self._full_count
+
+    def __eq__(self, other):
+        return self.id == other.id
+
+class CliCore:
+    def __init__(self, comp_reader, owner_reader):
+        self.companies = read_company_map(comp_reader)
+        self.counts = read_count_by_company(owner_reader)
+        self.company_counter = partial(count_for_company, company_map=self.companies, counts=self.counts)
+
+    def full_count(self, company):
+        return company.full_count(self.company_counter)
 
 def mk_tree(company_id, comp_reader, owner_reader, writer):
     ''' Produces tree structure - writing to writer
@@ -13,84 +41,61 @@ def mk_tree(company_id, comp_reader, owner_reader, writer):
     - owner_reader - csv format: land_id,company_id
     - writer output is written
     '''
-    companies = read_company_map(comp_reader)
-    counts = read_count_by_company(owner_reader)
+    core = CliCore(comp_reader, owner_reader)
 
-    comp = companies.get(company_id)
+    comp = core.companies.get(company_id)
     if comp is None:
         return
 
     # find the root company and build up a path
-    path_to_comp = create_path(comp, companies)
+    path_to_comp = create_path(comp, core.companies)
 
     current_company = path_to_comp[0]
 
     # write the root
-    writer.write(company_text(0, current_company.company,
-        count_for_company(current_company.company.id, companies, counts)))
-
-    write_tree(path_to_comp, companies, counts, writer, company_id)
-
-def write_tree(path_to_comp, companies, counts, writer, starred=None):
-    '''
-    exhaust all child iterators by starting at the root and drilling
-    when needed (our path from root to node contains a child)
-    '''
-    level = 0
-    while True:
-        going_deeper = False
-        for child_id in path_to_comp[level].child_itr:
-            child = companies[child_id] # asuming valid data and child exists
-
-            writer.write('  ')
-            writer.write(company_text(level + 1, child,
-                count_for_company(child_id, companies, counts),
-                child_id == starred))
-
-            # if this child is on the path and is not the end
-            if (level < len(path_to_comp) and
-                    child_id == path_to_comp[level + 1].company.id):
-                going_deeper = True
-                level += 1
-                break
-
-        if not going_deeper:
-            # we've reached the end of the children iterator
-            if level <= 0: # end of root's children
-                break
-            level -= 1
+    writer.write(company_text(0, current_company.company, core.full_count(current_company.company)))
+    for child_id in current_company.company.children_ids:
+        writer.write(company_text(1, core.companies[child_id], core.full_count(current_company.company)))
+        write_expanded_tree(child_id, core, writer, path_to_comp[1:])
 
 def expand_tree(company_id, comp_reader, owner_reader, writer):
     ' Given a company, expand all children '
 
-    companies = read_company_map(comp_reader)
-    counts = read_count_by_company(owner_reader)
+    core = CliCore(comp_reader, owner_reader)
 
-    target_company = companies[company_id]
+    return write_expanded_tree(company_id, core, writer)
+
+def write_expanded_tree(company_id, core, writer, expand_path=None):
+    target_company = core.companies[company_id]
 
     current_iter = CompanyChildItr(target_company,
             iter(sorted(target_company.children_ids)))
     path = deque()
+    level = 0
 
     while True:
         going_deeper = False
 
         for child_id in current_iter.child_itr:
-            child = companies[child_id] # asuming valid data and child exists
-            writer.write(company_text(len(path) + 1, child,
-                count_for_company(child_id, companies, counts)))
+            child = core.companies[child_id] # asuming valid data and child exists
+            writer.write(company_text(len(path) + 1, child, core.full_count(child)))
 
-            if child.children_ids:
+            if (expand_path is None or (
+                    level < len(expand_path)
+                    and expand_path[level] == child_id)):
+            #if child.children_ids:
                 path.append(current_iter)
 
                 current_iter = CompanyChildItr(child,
                         iter(sorted(child.children_ids)))
                 going_deeper = True
+                level += 1
                 break
 
         if not going_deeper:
             if not path:
                 break
+            level -= 1
             current_iter = path.pop()
 
 
@@ -172,8 +177,8 @@ def company_text(level, company, count, is_target=False):
     stars = (' ' + '*' * 3) if is_target else ''
     return f'{margin}{company.id}; {company.name}; {stats}{stars}\n'
 
-def count_for_company(company, company_map, counts):
+def count_for_company(company, *, company_map, counts):
     count = counts.get(company, 0)
     for child in company_map[company].children_ids:
-        count += count_for_company(child, company_map, counts)
+        count += count_for_company(child, company_map=company_map, counts=counts)
     return count

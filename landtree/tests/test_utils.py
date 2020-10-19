@@ -19,7 +19,7 @@ def test_company_map(companies):
 
 @pytest.mark.parametrize('comp, count', [('comp0', 8), ('comp2', 2), ('comp4', 3)])
 def test_counter(comp, count):
-    assert count_for_company(comp, company_map, company_counts) == count
+    assert count_for_company(comp, company_map=company_map, counts=company_counts) == count
 
 def test_count_parcels(ownership):
     parcel_counts = read_count_by_company(ownership)
