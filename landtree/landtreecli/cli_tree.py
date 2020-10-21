@@ -18,13 +18,17 @@ class Company:
         self.children_ids = children_ids
         self._full_count = None
         
-    def full_count(self, counter):
-        if self._full_count is None:
-            self._full_count = counter(self.id)
-        return self._full_count
+    #def full_count(self, counter):
+    #    if self._full_count is None:
+    #        self._full_count = counter(self.id)
+    #    return self._full_count
 
     def __eq__(self, other):
         return self.id == other.id
+
+    def __repr__(self):
+        return (f'Company({self.id}, {self.name}, {self.parent_id}, ' +
+                f'{self.children_ids})')
 
 class CliCore:
     def __init__(self, comp_reader, owner_reader):
@@ -33,7 +37,7 @@ class CliCore:
         self.company_counter = partial(count_for_company, company_map=self.companies, counts=self.counts)
 
     def full_count(self, company):
-        return company.full_count(self.company_counter)
+        return self.company_counter(company)
 
 def mk_tree(company_id, comp_reader, owner_reader, writer):
     ''' Produces tree structure - writing to writer
@@ -50,13 +54,9 @@ def mk_tree(company_id, comp_reader, owner_reader, writer):
     # find the root company and build up a path
     path_to_comp = create_path(comp, core.companies)
 
-    current_company = path_to_comp[0]
-
     # write the root
-    writer.write(company_text(0, current_company.company, core.full_count(current_company.company)))
-    for child_id in current_company.company.children_ids:
-        writer.write(company_text(1, core.companies[child_id], core.full_count(current_company.company)))
-        write_expanded_tree(child_id, core, writer, path_to_comp[1:])
+    writer.write(company_text(0, path_to_comp[0], core.full_count(path_to_comp[0].id)))
+    write_expanded_tree(path_to_comp[0].id, core, writer, [c.id for c in path_to_comp[1:]], '  ')
 
 def expand_tree(company_id, comp_reader, owner_reader, writer):
     ' Given a company, expand all children '
@@ -65,7 +65,7 @@ def expand_tree(company_id, comp_reader, owner_reader, writer):
 
     return write_expanded_tree(company_id, core, writer)
 
-def write_expanded_tree(company_id, core, writer, expand_path=None):
+def write_expanded_tree(company_id, core, writer, expand_path=None, left_margin=''):
     target_company = core.companies[company_id]
 
     current_iter = CompanyChildItr(target_company,
@@ -78,7 +78,9 @@ def write_expanded_tree(company_id, core, writer, expand_path=None):
 
         for child_id in current_iter.child_itr:
             child = core.companies[child_id] # asuming valid data and child exists
-            writer.write(company_text(len(path) + 1, child, core.full_count(child)))
+            writer.write(left_margin + company_text(len(path) + 1,
+                child, core.full_count(child.id),
+                expand_path is not None and expand_path[-1] == child_id))
 
             if (expand_path is None or (
                     level < len(expand_path)
@@ -101,15 +103,12 @@ def write_expanded_tree(company_id, core, writer, expand_path=None):
 
 def create_path(target_comp, companies):
     ' Creates a path from the root to a given company with child iterators '
-    path_to_comp = [CompanyChildItr(target_comp, [])]
+    path_to_comp = [target_comp]
 
     # allow for empty string - don't compare with None
-    while parent_id := path_to_comp[0].company.parent_id:
+    while parent_id := path_to_comp[0].parent_id:
         parent = companies.get(parent_id)
-        # each item has a Company and a new generator for it's children
-        # this will remember where we are when we iterate the children
-        child_iter = CompanyChildItr(parent, iter(sorted(parent.children_ids)))
-        path_to_comp.insert(0, child_iter)
+        path_to_comp.insert(0, parent)
 
     return path_to_comp
 

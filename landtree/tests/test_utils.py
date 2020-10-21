@@ -30,7 +30,7 @@ def test_create_path(companies):
     path = create_path(company_map['comp5'], company_map)
 
     for comp, expected_id in zip(path, ['comp0', 'comp1', 'comp5']):
-       assert comp.company.id == expected_id
+       assert comp.id == expected_id
 
 def test_company_text():
     companies = [

@@ -1,7 +1,7 @@
 import pytest
 from io import StringIO
 
-from landtreecli.cli_tree import (mk_tree, expand_tree)
+from landtreecli.cli_tree import mk_tree, expand_tree
 
 basic_tree_rows = [
         'comp0; Company 0; owner of 8 land parcels',
@@ -35,7 +35,6 @@ def test_basic_tree(companies, ownership, company, expected_tree):
     writer = StringIO()
     mk_tree(company, companies, ownership, writer)
     writer.seek(0)
-    #print(writer.getvalue())
     lines = writer.readlines()
 
     assert len(lines) == len(expected_tree)
